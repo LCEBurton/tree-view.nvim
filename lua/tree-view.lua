@@ -259,7 +259,16 @@ function M.goTo()
 end
 
 function M.setup(opts)
+  opts = opts or {}
+
+  local ignore_patterns = vim.list_extend(
+    vim.deepcopy(config.ignore_patterns),
+    opts.ignore_patterns or {}
+  )
+
   config = vim.tbl_deep_extend("force", config, opts or {})
+  config.ignore_patterns = ignore_patterns
+
 end
 
 return M

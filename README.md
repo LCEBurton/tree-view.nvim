@@ -8,15 +8,19 @@ Using lazy.nvim:
 
 ```lua
 {
-    "YOUR_GITHUB_USERNAME/tree-view.nvim",
+    "LCEBurton/tree-view.nvim",
     dependencies = {
         "nvim-tree/nvim-web-devicons",
         { "nvim-mini/mini.icons", opts = {} },
     },
     config = function()
         require("tree-view").setup({
-            width = 40,
-            side = "left",
+            width = 40,         -- Min width - extended if line length is greater than width value
+            side = "left",      -- Side plugin opens on
+            ignore_patterns = { -- Patterns to be ignored - default list included and values are appended
+                "%.pyc$",
+                "%.o$",
+            },
         })
     end,
 }
@@ -30,10 +34,12 @@ Using lazy.nvim:
     end, { desc = "Toggle tree view" })
 ```
 
-In tree-view buffer
-q - closes tree-view
-r - refreshes tree-view
-<CR> - Opens file under cursor in new window. Subsequent file opens will be opened in the same created window
+```
+    In tree-view buffer
+    q - closes tree-view
+    r - refreshes tree-view
+    <CR> - Opens file under cursor in new window. Subsequent file opens will be opened in the same created window
+```
 
 ## TODO
 
