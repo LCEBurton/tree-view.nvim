@@ -29,3 +29,14 @@ Using lazy.nvim:
         require("tree-view").toggle()
     end, { desc = "Toggle tree view" })
 ```
+
+In tree-view buffer
+q - closes tree-view
+r - refreshes tree-view
+<CR> - Opens file under cursor in new window. Subsequent file opens will be opened in the same created window
+
+## TODO
+
+Display status of git if .git exists
+Allow parsing of .gitignore files to configure ignore list
+Folding directories
