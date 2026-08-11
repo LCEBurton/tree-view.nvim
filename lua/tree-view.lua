@@ -1,12 +1,17 @@
 local M = {}
 
 local buf = nil
-local win = nil
 
 local has_devicons, devicons = pcall(require, "nvim-web-devicons")
 local has_mini, mini = pcall(require, "mini.icons")
 
 local ns = vim.api.nvim_create_namespace("tree_view")
+
+local state = {
+  lines = {},
+  file_win = nil,
+  tree_win = nil,
+}
 
 -- Configuration
 local config = {
@@ -17,6 +22,7 @@ local config = {
     "^%.cache$",
     "^build$",
     "^dist$",
+    "^htmlcov$",
 
     -- Python stuff
     "^__pycache__$",
@@ -82,7 +88,12 @@ local function build_tree(lines, hls, path, prefix)
     local branch = is_last_entry and "└── " or "├── "
     local icon, hl = get_icon(entry.name, entry.type)
 
-    table.insert(lines, prefix .. branch .. icon .. " " .. entry.name)
+    table.insert(lines, {
+      line = prefix .. branch .. icon .. " " .. entry.name,
+      path = path .. "/" .. entry.name,
+      name = entry.name,
+      type = entry.type,
+    })
 
     if hl then
       table.insert(hls, {
@@ -103,9 +114,9 @@ end
 
 -- Create or toggle tree view
 function M.toggle()
-  if win and vim.api.nvim_win_is_valid(win) then
-    vim.api.nvim_win_close(win, true)
-    win = nil
+  if state.tree_win and vim.api.nvim_win_is_valid(state.tree_win) then
+    vim.api.nvim_win_close(state.tree_win, true)
+    state.tree_win = nil
     buf = nil
     return
   end
@@ -118,11 +129,21 @@ function M.open()
   local root = vim.fn.getcwd()
 
   -- Build tree
-  local lines = {}
+  state.lines = {}
   if has_mini then
-    lines = { mini.get("directory", vim.fn.fnamemodify(root, ":t")) .. " " .. vim.fn.fnamemodify(root, ":t") }
+    table.insert(state.lines, {
+      line = mini.get("directory", vim.fn.fnamemodify(root, ":t")) .. " " .. vim.fn.fnamemodify(root, ":t"),
+      path = root,
+      name = vim.fn.fnamemodify(root, ":t"),
+      type = "directory",
+    })
   else
-    lines = { "📁 " .. vim.fn.fnamemodify(root, ":t")}
+    table.insert(state.lines, {
+      line = "📁 " .. vim.fn.fnamemodify(root, ":t"),
+      path = root,
+      name = vim.fn.fnamemodify(root, ":t"),
+      type = "directory",
+    })
   end
 
   local hls = {}
@@ -136,11 +157,12 @@ function M.open()
       hl = hl,
     })
   end
-  build_tree(lines, hls, root, "")
+  build_tree(state.lines, hls, root, "")
 
   -- Create scratch buffer (not associated with a file)
+  local rendered_lines = vim.tbl_map(function(entry) return entry.line end, state.lines)
   buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, rendered_lines)
   for _, hl in ipairs(hls) do
     vim.api.nvim_buf_set_extmark(buf, ns, hl.line, hl.start_col, {
       end_col = hl.end_col,
@@ -155,29 +177,85 @@ function M.open()
 
   -- Create split window
   vim.cmd(config.side == "left" and "topleft vsplit" or "botright vsplit")
-  win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(win, buf)
-  vim.api.nvim_win_set_width(win, config.width)
+  state.tree_win = vim.api.nvim_get_current_win()
+
+  M.setTreeWinOptions(state.tree_win, buf)
+
+end
+
+function M.setTreeWinOptions(_win, _buf)
+  -- Calculate the width of the tree view based on the longest line
+  local max_width = config.width
+  for _, line in ipairs(state.lines) do
+    max_width = math.max(max_width, vim.fn.strdisplaywidth(line.line))
+  end
 
   -- Window options 
-  vim.wo[win].number = false
-  vim.wo[win].relativenumber = false
-  vim.wo[win].signcolumn = "no"
-  vim.wo[win].foldcolumn = "0"
-  vim.wo[win].cursorline = true
+  vim.wo[_win].number = false
+  vim.wo[_win].relativenumber = false
+  vim.wo[_win].signcolumn = "no"
+  vim.wo[_win].foldcolumn = "0"
+  vim.wo[_win].cursorline = true
+  vim.wo[_win].winfixwidth = true
 
-  -- Keymaps: q to close, r to refresh
-  vim.keymap.set("n", "q", function() require("tree-view").toggle() end, { buffer = buf, noremap = true, silent = true })
-  vim.keymap.set("n", "r", function() require("tree-view").refresh() end, { buffer = buf, noremap = true, silent = true })
+  vim.api.nvim_win_set_buf(_win, _buf)
+  vim.api.nvim_win_set_width(_win, max_width)
+
+  -- Keymaps: q to close, r to refresh, <CR> to go to file
+  vim.keymap.set("n", "q", function() require("tree-view").toggle() end, { buffer = _buf, noremap = true, silent = true })
+  vim.keymap.set("n", "r", function() require("tree-view").refresh() end, { buffer = _buf, noremap = true, silent = true })
+  vim.keymap.set("n", "<CR>", function() require("tree-view").goTo() end, { buffer = _buf, noremap = true, silent = true })
 end
 
 function M.refresh()
-  if win and vim.api.nvim_win_is_valid(win) then
-    vim.api.nvim_win_close(win, true)
-    win = nil
+  if state.tree_win and vim.api.nvim_win_is_valid(state.tree_win) then
+    vim.api.nvim_win_close(state.tree_win, true)
+    state.tree_win = nil
     buf = nil
   end
   M.open()
+end
+
+function M.goTo()
+
+  if not (state.tree_win and vim.api.nvim_win_is_valid(state.tree_win)) then
+    print("Tree view is not open.")
+    return
+  end
+
+  buf = vim.api.nvim_win_get_buf(state.tree_win)
+
+  local cursor = vim.api.nvim_win_get_cursor(state.tree_win)
+  local line_num = cursor[1] - 1 -- zero-indexed
+  local buf_lines = vim.api.nvim_buf_get_lines(buf, line_num, line_num + 1, false)
+  if #buf_lines == 0 then
+    print("No line under cursor.")
+    return
+  end
+
+  local selected_line = state.lines[line_num + 1]
+
+  if selected_line.type == "directory" then
+    print("Selected line is a directory. Please select a file.")
+    return
+  end
+
+  local new_buf = vim.fn.bufadd(selected_line.path)
+  vim.fn.bufload(new_buf)
+
+  if state.file_win and vim.api.nvim_win_is_valid(state.file_win) then
+    vim.api.nvim_win_set_buf(state.file_win, new_buf)
+  else
+    state.file_win = vim.api.nvim_open_win(new_buf, true, {
+      split = "right",
+      win = state.tree_win,
+    })
+  end
+
+  local tree_buf = vim.api.nvim_win_get_buf(state.tree_win)
+  M.setTreeWinOptions(state.tree_win, tree_buf)
+  vim.cmd("wincmd =") -- Equalize window sizes
+
 end
 
 function M.setup(opts)
