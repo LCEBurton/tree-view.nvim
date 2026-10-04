@@ -29,9 +29,10 @@ Using lazy.nvim:
 ## Usage
 
 ```lua
-    vim.keymap.set("n", "<leader>T", function()
-        require("tree-view").toggle()
-    end, { desc = "Toggle tree view" })
+    vim.keymap.set("n", "<leader>T", 
+        ":TreeViewToggle<CR>", 
+        { desc = "Toggle tree view" }
+    )
 ```
 
 ```
@@ -43,6 +44,12 @@ Using lazy.nvim:
 
 ## TODO
 
+```
 Display status of git if .git exists
 Allow parsing of .gitignore files to configure ignore list
 Folding directories
+LSP integration to show diagnostics in tree-view
+Auto refresh on file changes
+Potentially oil.nvim integration
+Clean up file structure
+```

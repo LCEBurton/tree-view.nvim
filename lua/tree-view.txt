@@ -170,9 +170,6 @@ function M.open()
     })
   end
 
-  -- Buffer options 
-  vim.bo[buf].modifiable = false  -- read-only
-  vim.bo[buf].bufhidden = "wipe"  -- delete buffer when window closes
   vim.api.nvim_buf_set_name(buf, "Tree View")
 
   -- Create split window
@@ -197,6 +194,13 @@ function M.setTreeWinOptions(_win, _buf)
   vim.wo[_win].foldcolumn = "0"
   vim.wo[_win].cursorline = true
   vim.wo[_win].winfixwidth = true
+
+  -- Buffer options 
+  vim.bo[_buf].modifiable = false  -- read-only
+  vim.bo[_buf].bufhidden = "wipe"  -- delete buffer when window closes
+  vim.bo[_buf].buftype = "nofile"  -- not associated with a file
+  vim.bo[_buf].swapfile = false  -- no swap file
+
 
   vim.api.nvim_win_set_buf(_win, _buf)
   vim.api.nvim_win_set_width(_win, max_width)
@@ -270,5 +274,22 @@ function M.setup(opts)
   config.ignore_patterns = ignore_patterns
 
 end
+
+function M.close()
+  if state.tree_win and vim.api.nvim_win_is_valid(state.tree_win) then
+    vim.api.nvim_win_close(state.tree_win, true)
+    state.tree_win = nil
+    buf = nil
+  end
+end
+
+
+vim.api.nvim_create_user_command("TreeViewToggle", function() M.toggle() end, {})
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+  callback = function()
+    M.close()
+  end,
+})
 
 return M
