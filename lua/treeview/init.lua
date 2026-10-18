@@ -22,6 +22,11 @@ function M.setup(opts)
     M.toggle()
   end, {})
 
+  vim.api.nvim_create_user_command("TreeViewReload", function()
+    require("plenary.reload").reload_module("treeview")
+    require("treeview").setup(opts)
+  end, {})
+
   -- Reset project root and re-render tree when directory changes
   vim.api.nvim_create_autocmd("DirChanged", {
     callback = function()
